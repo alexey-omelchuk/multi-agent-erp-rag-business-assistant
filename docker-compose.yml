@@ -1,0 +1,119 @@
+# Arranque:   docker compose up --build
+#             Chat:  http://localhost:8080
+#             API:   http://localhost:8000/docs
+#             Produccion (simulada): http://localhost:8001/docs
+# Tests:      docker compose run --rm tests
+# Scripts:    docker compose run --rm cli python scripts/try_tools.py
+#             docker compose run --rm cli python scripts/try_rag.py
+#             docker compose run --rm cli python scripts/ask.py "pregunta"
+# Parar:      docker compose down        (anade -v para borrar tambien los datos)
+
+# Rutas de los datos generados, compartidas por los servicios que los usan.
+x-data-env: &data-env
+  NORTHWIND_DB_PATH: /data/northwind.db
+  PRODUCTION_DATA_PATH: /data/production_orders.json
+  CHROMA_DIR: /data/chroma
+
+# Los servicios de la aplicacion comparten imagen: se construye desde el
+# Dockerfile (etapa "runtime") y nunca se busca en Docker Hub.
+x-app-image: &app-image
+  build:
+    context: .
+    target: runtime
+  image: prueba-tecnica-agentes
+
+services:
+  # Se ejecuta una vez y termina: crea el ERP con fechas actuales, los datos
+  # de produccion e indexa los PDF de ejemplo. Los demas esperan a que acabe bien.
+  init-data:
+    <<: *app-image
+    command: >
+      sh -c "python scripts/prepare_northwind.py
+      && python -m production_api.seed
+      && python -m app.rag.ingest data/docs/*.pdf"
+    environment: *data-env
+    volumes:
+      - app-data:/data
+
+  production-api:
+    <<: *app-image
+    command: uvicorn production_api.main:app --host 0.0.0.0 --port 8001
+    environment: *data-env
+    volumes:
+      - app-data:/data
+    ports:
+      - "8001:8001"
+    depends_on:
+      init-data:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # API principal: POST /api/query y POST /api/documents.
+  api:
+    <<: *app-image
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000
+    # MODEL y la clave del proveedor salen de .env, que no entra en la imagen.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *data-env
+      # Dentro de Docker cada servicio se alcanza por su nombre, no por localhost.
+      PRODUCTION_API_URL: http://production-api:8001
+    volumes:
+      - app-data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      production-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Interfaz de chat. Solo conoce la URL de la API.
+  ui:
+    <<: *app-image
+    command: chainlit run ui/chainlit_app.py --headless --host 0.0.0.0 --port 8080
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Contenedor para lanzar scripts a mano contra los datos y la API reales:
+  #   docker compose run --rm cli python scripts/try_tools.py
+  cli:
+    <<: *app-image
+    profiles: ["cli"]
+    # MODEL y la clave del proveedor salen de .env, que no entra en la imagen.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *data-env
+      PRODUCTION_API_URL: http://production-api:8001
+    volumes:
+      - app-data:/data
+    depends_on:
+      production-api:
+        condition: service_healthy
+
+  # Solo se ejecuta si se pide: docker compose run --rm tests
+  tests:
+    build:
+      context: .
+      target: test
+    image: prueba-tecnica-agentes-tests
+    profiles: ["test"]
+
+volumes:
+  app-data:

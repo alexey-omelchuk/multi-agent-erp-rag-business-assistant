@@ -1,0 +1,34 @@
+# Secretos
+.env
+
+# Entorno virtual y caches de Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Datos generados en local (se recrean con los scripts de preparacion)
+data/northwind.db
+data/northwind.db.tmp
+data/production_orders.json
+chroma/
+uploads/
+
+# Chainlit
+.chainlit/
+.files/
+
+# Enunciado de la prueba (confidencial, no se publica)
+Prueba-Tecnica-IA-Agentes.pdf
+*Prueba-Tecnica*.pdf
+
+# Notas de trabajo y configuracion local de herramientas
+PLAN.md
+.claude/
+CLAUDE.md
+
+# Editor y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

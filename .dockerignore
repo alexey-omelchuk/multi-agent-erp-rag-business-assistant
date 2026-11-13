@@ -1,0 +1,17 @@
+# Lo que no debe entrar en la imagen.
+.git
+.env
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+chroma
+uploads
+.chainlit
+.files
+Prueba-Tecnica-IA-Agentes.pdf
+
+# Datos generados: en Docker se crean en el volumen /data.
+data/northwind.db
+data/northwind.db.tmp
+data/production_orders.json
