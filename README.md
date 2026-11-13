@@ -25,7 +25,7 @@ cp .env.example .env
 Abre `.env` y rellena dos valores:
 
 ```env
-MODEL=openai:gpt-4o-mini
+MODEL=openai:gpt-5.6-luna
 OPENAI_API_KEY=tu-clave
 ```
 

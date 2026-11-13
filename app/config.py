@@ -27,7 +27,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     # Modelo de lenguaje, en formato "proveedor:modelo".
-    model: str = "openai:gpt-4o-mini"
+    model: str = "openai:gpt-5.6-luna"
+    # Vacio: se usa el valor por defecto del proveedor. Los modelos de
+    # razonamiento no suelen admitir una temperatura fija.
+    model_temperature: float | None = None
 
     # Fuentes de datos.
     northwind_db_path: Path = Path("data/northwind.db")

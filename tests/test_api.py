@@ -142,6 +142,6 @@ def test_ui_formatting():
     assert "2 llamadas a herramientas · 12.3 s" in text
     assert "ninguna" in format_answer({"answer": "x", "sources": []})
     assert format_reasoning(["uno", "dos"]) == "1. uno\n2. dos"
-    error = format_error(503, "No se ha podido iniciar el modelo 'openai:gpt-4o-mini'.")
+    error = format_error(503, "No se ha podido iniciar el modelo 'openai:gpt-5.6-luna'.")
     assert error.startswith("**Error 503.**")
-    assert "```text\nNo se ha podido iniciar el modelo 'openai:gpt-4o-mini'.\n```" in error
+    assert "```text\nNo se ha podido iniciar el modelo 'openai:gpt-5.6-luna'.\n```" in error

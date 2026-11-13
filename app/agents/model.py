@@ -11,10 +11,12 @@ class ModelNotConfiguredError(RuntimeError):
 
 
 def get_chat_model() -> BaseChatModel:
-    model = get_settings().model
+    settings = get_settings()
+    model = settings.model
+    # La temperatura solo se envia si se ha configurado (MODEL_TEMPERATURE).
+    options = {} if settings.model_temperature is None else {"temperature": settings.model_temperature}
     try:
-        # temperature=0: ante la misma pregunta, el comportamiento mas repetible posible.
-        return init_chat_model(model, temperature=0)
+        return init_chat_model(model, **options)
     except Exception as exc:
         raise ModelNotConfiguredError(
             f"No se ha podido iniciar el modelo '{model}'. Revisa en .env la variable MODEL "

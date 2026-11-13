@@ -18,5 +18,5 @@ def format_upload(document: dict) -> str:
 
 def format_error(status_code: int, detail: str) -> str:
     # El detalle va en un bloque de codigo: asi el chat lo muestra literal y no
-    # interpreta como formato textos como "openai:gpt-4o-mini".
+    # interpreta como formato textos como "openai:gpt-5.6-luna".
     return f"**Error {status_code}.** No se ha podido completar la operación.\n\n```text\n{detail}\n```"
