@@ -206,5 +206,3 @@ Python 3.12, con las dependencias fijadas en `pyproject.toml` y `uv.lock`.
 
 - **Northwind**: versión para SQLite de [jpwhite3/northwind-SQLite3](https://github.com/jpwhite3/northwind-SQLite3) (licencia MIT).
 - Los datos de producción y los PDF de `data/docs/` son **ficticios**, creados para esta demostración.
-# asistente-negocio-multiagente-erp-rag
-# multi-agent-erp-rag-business-assistant
