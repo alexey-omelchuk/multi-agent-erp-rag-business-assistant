@@ -42,54 +42,48 @@ AZURE_OPENAI_MODEL_DEPLOYMENT_NAME=gpt-5.6-luna
 **2. Boot up the system**
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
-The initial startup takes a few minutes. During boot, the system automatically provisions the ERP data, the mock production data, and pre-indexes two sample PDFs into the vector store.
+A single command brings everything up: the application and Langfuse. The first run takes a few minutes (image and dependency downloads) and needs about 4 GB of RAM. During boot, the system automatically provisions the ERP data, the mock production data, two pre-indexed sample PDFs and the Langfuse user.
+
+Check that everything is running with `docker compose ps`.
 
 **3. Start using it**
 
-| Service                         | URL                        |
-| ------------------------------- | -------------------------- |
-| **Chat UI**                     | http://localhost:8080      |
-| **Main API** (Interactive docs) | http://localhost:8000/docs |
-| Mock Production API             | http://localhost:8001/docs |
+| Service                         | URL                        | Login                                  |
+| ------------------------------- | -------------------------- | -------------------------------------- |
+| **Chat UI**                     | http://localhost:8080      |                                        |
+| **Main API** (interactive docs) | http://localhost:8000/docs |                                        |
+| Mock Production API             | http://localhost:8001/docs |                                        |
+| **Langfuse** (traces)           | http://localhost:3000      | `admin@example.com` / `langfuse-local` |
 
-To check that the model is reachable before asking anything (takes a few seconds and reports the exact error if a key, endpoint or API version is wrong):
+**Useful commands**
 
-```bash
-docker compose run --rm cli python scripts/check_model.py
-```
-
-To see what is stored in each data source (ERP tables, production states, indexed chunks), without any LLM:
-
-```bash
-docker compose run --rm cli python scripts/inspect_data.py erp
-docker compose run --rm cli python scripts/inspect_data.py chroma
-docker compose run --rm cli python scripts/inspect_data.py search "late delivery penalty"
-```
-
-To stop the system: run `docker compose down` (add `-v` to wipe generated data and volumes).
+| To...                                       | Command                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------- |
+| Check that the model is reachable           | `docker compose run --rm cli python scripts/check_model.py`         |
+| Ask from the terminal                       | `docker compose run --rm cli python scripts/ask.py "your question"` |
+| Inspect the ERP tables and orders           | `docker compose run --rm cli python scripts/inspect_data.py erp`    |
+| Inspect the indexed chunks and vectors      | `docker compose run --rm cli python scripts/inspect_data.py chroma` |
+| Follow the API logs (every trace step)      | `docker compose logs -f api`                                        |
+| Run the tests                               | `docker compose run --rm --build tests`                             |
+| Stop                                        | `docker compose down` (add `-v` to also wipe the data)              |
 
 ---
 
-## Observability with Langfuse (optional)
+## Observability with Langfuse
 
-Every answer already carries its own trace (`sources`, `reasoning`, `steps`). For a deeper, operator-level view, the system can also send each query to a self-hosted [Langfuse](https://langfuse.com) instance: every LLM call and tool call, nested by agent, with inputs, outputs, token usage and latency, grouped by conversation.
+Every answer carries its own trace (`sources`, `reasoning`, `steps`), meant for the person asking. [Langfuse](https://langfuse.com) adds the operator's view: every LLM call and tool call, nested by agent, with inputs, outputs, token usage and latency, grouped by conversation.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d --build
-```
+It is deployed alongside the application, self-hosted and with no manual setup: the user, the project and its API keys are created on first boot, and the app picks up the same keys. Open http://localhost:3000, log in with `admin@example.com` / `langfuse-local` and go to **Tracing** to see every query.
 
-| Service           | URL                   | Login                                  |
-| ----------------- | --------------------- | -------------------------------------- |
-| **Langfuse UI**   | http://localhost:3000 | `admin@example.com` / `langfuse-local` |
+How it is wired:
 
-To avoid repeating both `-f` flags on every command, uncomment the `COMPOSE_FILE` line in `.env`: from then on, `docker compose up -d` brings everything up.
-
-No manual setup is required: the user, the project and its API keys are created on first boot (headless initialization), and the app picks up the same keys. Langfuse needs a few extra minutes and around 4 GB of RAM on first start.
-
-Tracing is switched on only when `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set. Without them, or if Langfuse is unreachable, queries work exactly the same. The passwords in `docker-compose.langfuse.yml` are meant for local use; change every line marked `CHANGEME` before exposing it.
+- **`docker-compose.langfuse.yml`** defines the Langfuse services. It is merged into the main compose file through the `COMPOSE_FILE` line in `.env`.
+- **To run without Langfuse** (saves about 4 GB of RAM), comment out that line in `.env`. The application behaves exactly the same; it simply stops sending traces.
+- **User and password** are changed with `LANGFUSE_INIT_USER_EMAIL` and `LANGFUSE_INIT_USER_PASSWORD` in `.env`, before the first boot.
+- **The passwords in the file are for local use.** Change every line marked `CHANGEME` before exposing it outside your machine.
 
 ---
 
@@ -156,6 +150,7 @@ flowchart TD
     E --> ERP[(Northwind · SQLite)]
     P -->|HTTP| PROD[Production API]
     D --> VEC[(Chroma · Vector DB)]
+    API -.->|traces| LF[Langfuse]
 ```
 
 **Query Execution Flow**

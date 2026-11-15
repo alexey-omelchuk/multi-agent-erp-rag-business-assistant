@@ -45,53 +45,45 @@ AZURE_OPENAI_MODEL_DEPLOYMENT_NAME=gpt-5.6-luna
 docker compose up -d --build
 ```
 
-La primera vez tarda unos minutos. Al arrancar se preparan solos los datos del ERP, los de producción y dos PDF de ejemplo ya indexados.
+Un solo comando levanta todo: la aplicación y Langfuse. La primera vez tarda unos minutos (descarga de imágenes y dependencias) y necesita unos 4 GB de RAM. Al arrancar se preparan solos los datos del ERP, los de producción, dos PDF de ejemplo ya indexados y el usuario de Langfuse.
+
+Comprueba que todo está en marcha con `docker compose ps`.
 
 **3. Úsalo**
 
-| Servicio                            | Dirección                  |
-| ----------------------------------- | -------------------------- |
-| **Chat**                            | http://localhost:8080      |
-| **API** (documentación interactiva) | http://localhost:8000/docs |
-| Sistema de producción simulado      | http://localhost:8001/docs |
+| Servicio                            | Dirección                  | Acceso                                 |
+| ----------------------------------- | -------------------------- | -------------------------------------- |
+| **Chat**                            | http://localhost:8080      |                                        |
+| **API** (documentación interactiva) | http://localhost:8000/docs |                                        |
+| Sistema de producción simulado      | http://localhost:8001/docs |                                        |
+| **Langfuse** (trazas)               | http://localhost:3000      | `admin@example.com` / `langfuse-local` |
 
-Para comprobar que el modelo responde antes de preguntar nada (tarda segundos y dice el error exacto si falla una clave, la URL o la versión de la API):
+**Comandos útiles**
 
-```bash
-docker compose run --rm cli python scripts/check_model.py
-```
-
-Para ver qué hay guardado en cada fuente (tablas del ERP, estados de producción, fragmentos indexados), sin usar el modelo:
-
-```bash
-docker compose run --rm cli python scripts/inspect_data.py erp
-docker compose run --rm cli python scripts/inspect_data.py chroma
-docker compose run --rm cli python scripts/inspect_data.py search "penalización por retraso"
-```
-
-Para parar: `docker compose down` (con `-v` se borran también los datos generados).
+| Para...                                         | Comando                                                              |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| Comprobar que el modelo responde                | `docker compose run --rm cli python scripts/check_model.py`          |
+| Preguntar desde la terminal                     | `docker compose run --rm cli python scripts/ask.py "tu pregunta"`    |
+| Ver las tablas y los pedidos del ERP            | `docker compose run --rm cli python scripts/inspect_data.py erp`     |
+| Ver los fragmentos indexados y sus vectores     | `docker compose run --rm cli python scripts/inspect_data.py chroma`  |
+| Ver los logs de la API (cada paso de la traza)  | `docker compose logs -f api`                                         |
+| Lanzar los tests                                | `docker compose run --rm --build tests`                              |
+| Parar                                           | `docker compose down` (con `-v` se borran también los datos)         |
 
 ---
 
-## Observabilidad con Langfuse (opcional)
+## Observabilidad con Langfuse
 
-Cada respuesta lleva ya su propia traza (`sources`, `reasoning`, `steps`). Para una vista más profunda, pensada para quien opera el sistema, cada consulta se puede enviar además a un [Langfuse](https://langfuse.com) autoalojado: cada llamada al modelo y a cada herramienta, anidada por agente, con sus entradas, salidas, tokens y tiempos, y agrupada por conversación.
+Cada respuesta lleva su propia traza (`sources`, `reasoning`, `steps`), pensada para quien pregunta. [Langfuse](https://langfuse.com) añade la vista de quien opera el sistema: cada llamada al modelo y a cada herramienta, anidada por agente, con sus entradas, salidas, tokens y tiempos, y agrupada por conversación.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d --build
-```
+Se despliega junto a la aplicación, autoalojado y sin configuración manual: el usuario, el proyecto y sus claves de API se crean en el primer arranque, y la aplicación usa esas mismas claves. Entra en http://localhost:3000 con `admin@example.com` / `langfuse-local` y abre **Tracing** para ver cada consulta.
 
-Para no repetir los dos `-f` en cada comando, descomenta la línea `COMPOSE_FILE` de `.env`: a partir de ahí, `docker compose up -d` lo levanta todo.
+Cómo está montado:
 
-| Servicio     | Dirección             | Acceso                                 |
-| ------------ | --------------------- | -------------------------------------- |
-| **Langfuse** | http://localhost:3000 | `admin@example.com` / `langfuse-local` |
-
-No requiere configuración manual: el usuario, el proyecto y sus claves de API se crean en el primer arranque, y la aplicación usa esas mismas claves. Langfuse necesita unos minutos más y alrededor de 4 GB de RAM la primera vez.
-
-El usuario y la contraseña se cambian con `LANGFUSE_INIT_USER_EMAIL` y `LANGFUSE_INIT_USER_PASSWORD` en `.env`, antes del primer arranque. Las contraseñas de `docker-compose.langfuse.yml` son para uso local: cambia todas las líneas marcadas con `CHANGEME` antes de exponerlo.
-
-El envío de trazas solo se activa si existen `LANGFUSE_PUBLIC_KEY` y `LANGFUSE_SECRET_KEY`. Sin ellas, o si Langfuse no responde, las consultas funcionan exactamente igual.
+- **`docker-compose.langfuse.yml`** define los servicios de Langfuse. Se suma al compose principal gracias a la línea `COMPOSE_FILE` de `.env`.
+- **Para arrancar sin Langfuse** (ahorra unos 4 GB de RAM), comenta esa línea en `.env`. La aplicación funciona exactamente igual: solo deja de enviar trazas.
+- **Usuario y contraseña** se cambian con `LANGFUSE_INIT_USER_EMAIL` y `LANGFUSE_INIT_USER_PASSWORD` en `.env`, antes del primer arranque.
+- **Las contraseñas del archivo son para uso local.** Cambia todas las líneas marcadas con `CHANGEME` antes de exponerlo fuera de tu equipo.
 
 ---
 
@@ -155,6 +147,7 @@ flowchart TD
     E --> ERP[(Northwind · SQLite)]
     P -->|HTTP| PROD[API de producción]
     D --> VEC[(Chroma · vectores)]
+    API -.->|trazas| LF[Langfuse]
 ```
 
 **Cómo se resuelve una pregunta**
