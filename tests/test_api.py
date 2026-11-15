@@ -125,6 +125,12 @@ def test_upload_without_file_returns_422(client):
     assert client.post("/api/documents").status_code == 422
 
 
+def test_root_redirects_to_the_docs(client):
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
+
+
 def test_health(client):
     body = client.get("/health").json()
     assert body["status"] == "ok"

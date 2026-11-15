@@ -21,6 +21,18 @@ def test_search_customers_without_match(erp):
     assert erp.search_customers("no existe este cliente") == []
 
 
+def test_customers_overview(erp):
+    customers = erp.customers_overview()
+    assert len(customers) == 93
+    assert sum(customer["orders"] for customer in customers) == 830
+    assert sum(customer["pending_orders"] for customer in customers) == 21
+    ernst = next(customer for customer in customers if customer["customer_id"] == "ERNSH")
+    assert ernst["orders"] == 30 and ernst["pending_orders"] == 2
+    amounts = [customer["total_amount"] for customer in customers]
+    assert amounts == sorted(amounts, reverse=True)
+    assert {customer["country"] for customer in erp.customers_overview("germany")} == {"Germany"}
+
+
 def test_customer_orders(erp):
     orders = erp.customer_orders("ERNSH")
     assert len(orders) == 30

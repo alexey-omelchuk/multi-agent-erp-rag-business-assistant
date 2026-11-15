@@ -35,6 +35,27 @@ def search_customers(query: str) -> dict:
 
 
 @tool(parse_docstring=True)
+def list_customers(country: str | None = None) -> dict:
+    """Lista todos los clientes con su numero de pedidos, pedidos pendientes e importe total, de mayor a menor importe.
+
+    Usala para preguntas generales sobre los clientes ("que clientes hay",
+    "todos los clientes y sus pedidos", "mejores clientes"). Es una sola
+    consulta: no llames a get_customer_orders cliente por cliente para esto.
+
+    Args:
+        country: Pais para filtrar, en ingles como en el ERP (por ejemplo "Germany", "Spain"). Sin valor, todos.
+    """
+    customers = get_erp_repository().customers_overview(country)
+    if not customers:
+        return {"total": 0, "customers": [], "note": f"Ningun cliente con pais '{country}'."}
+    return {
+        "total": len(customers),
+        "total_orders": sum(customer["orders"] for customer in customers),
+        "customers": customers,
+    }
+
+
+@tool(parse_docstring=True)
 def get_customer_orders(customer_id: str, only_pending: bool = False) -> dict:
     """Devuelve los pedidos de un cliente con sus fechas, importe y estado en el ERP.
 
@@ -100,4 +121,4 @@ def get_orders_summary(start_date: str | None = None, end_date: str | None = Non
     return get_erp_repository().orders_summary(start, end)
 
 
-ERP_TOOLS = [search_customers, get_customer_orders, get_pending_orders, get_orders_by_id, get_orders_summary]
+ERP_TOOLS = [search_customers, list_customers, get_customer_orders, get_pending_orders, get_orders_by_id, get_orders_summary]

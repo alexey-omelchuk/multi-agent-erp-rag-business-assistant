@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.agents.model import ModelNotConfiguredError  # noqa: E402
 from app.logging_config import setup_logging  # noqa: E402
+from app.observability import flush_traces  # noqa: E402
 from app.services.query_service import get_query_service  # noqa: E402
 
 # Las cuatro preguntas del enunciado, dos de seguimiento (memoria) y una de documentos.
@@ -48,3 +49,5 @@ if __name__ == "__main__":
             ask(question, session_id="demo")
     except ModelNotConfiguredError as exc:
         raise SystemExit(f"ERROR: {exc}")
+    finally:
+        flush_traces()

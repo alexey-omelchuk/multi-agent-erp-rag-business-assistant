@@ -5,6 +5,7 @@ Agent = Model + Harness. Aqui se monta el harness:
   - subagentes (a quien puede delegar, con la tool `task`)
   - planificacion (tool `write_todos`)
   - memoria (checkpointer + ventana de interacciones recientes)
+  - limites (tope de llamadas a tools y al modelo por consulta)
 El coordinador no recibe ninguna tool de datos: para saber algo tiene que delegar.
 """
 
@@ -14,6 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
+from app.agents.limits import build_limits
 from app.agents.memory import RecentTurnsMiddleware
 from app.agents.model import get_chat_model
 from app.agents.prompts import coordinator_prompt
@@ -36,6 +38,7 @@ def build_coordinator(
         middleware=[
             TodoListMiddleware(),
             RecentTurnsMiddleware(previous_turns=settings.memory_max_interactions),
+            *build_limits(coordinator=True),
         ],
         checkpointer=checkpointer,
     )

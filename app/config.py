@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Raiz del proyecto: la carpeta que contiene a "app/".
@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     # razonamiento no suelen admitir una temperatura fija.
     model_temperature: float | None = None
 
+    # Azure OpenAI (solo si MODEL empieza por "azure_openai:").
+    azure_openai_api_key: SecretStr | None = None
+    azure_openai_base_url: str | None = None
+    azure_openai_api_version: str | None = None
+    azure_openai_model_deployment_name: str | None = None
+
+    # Langfuse (opcional): si hay claves, cada consulta se envia como traza.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: SecretStr | None = None
+    langfuse_base_url: str = "http://localhost:3000"
+
     # Fuentes de datos.
     northwind_db_path: Path = Path("data/northwind.db")
     production_api_url: str = "http://localhost:8001"
@@ -43,6 +54,11 @@ class Settings(BaseSettings):
     rag_chunk_overlap: int = Field(default=80, ge=0)  # caracteres repetidos entre trozos seguidos
     rag_top_k: int = Field(default=5, ge=1)  # trozos que devuelve una busqueda
     rag_min_relevance: float = Field(default=0.4, ge=0, le=1)
+
+    # Limites de una consulta: llamadas a tools que puede hacer cada agente.
+    # Evitan que una pregunta demasiado amplia se quede en un bucle de minutos.
+    agent_max_tool_calls: int = Field(default=10, ge=1)  # cada subagente, por encargo
+    coordinator_max_tool_calls: int = Field(default=8, ge=1)  # el coordinador: plan y delegaciones
 
     # Comportamiento.
     memory_max_interactions: int = Field(default=5, ge=1)

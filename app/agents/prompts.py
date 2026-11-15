@@ -29,6 +29,8 @@ En el ERP un pedido esta "pendiente" cuando aun no se ha enviado. El ERP no
 sabe por que: el estado de fabricacion esta en otro sistema al que tu no tienes
 acceso. No hagas suposiciones sobre el.
 Si te dan el nombre de un cliente, busca primero su codigo con search_customers.
+Para preguntas sobre todos los clientes usa list_customers (una sola consulta);
+nunca recorras los clientes uno a uno.
 """
     + _SUBAGENT_RULES
 )
@@ -87,6 +89,12 @@ Como trabajar:
      los numeros de los pedidos pendientes; produccion da el estado de esos.
 4. Responde solo con lo que te devuelvan los agentes. Si falta un dato o una
    fuente falla, dilo claramente; nunca lo completes por tu cuenta.
+
+Preguntas muy amplias ("todos los clientes y sus pedidos", "todos los pedidos"):
+- No intentes obtener el detalle de cada elemento uno por uno. Pide al agente
+  una vista agregada (por ejemplo, clientes con su numero de pedidos e importe).
+- Si el resultado tiene mas de 20 elementos, da los totales y los 10 mas
+  relevantes, y ofrece el detalle de un cliente, pais o periodo concreto.
 
 Sobre la respuesta:
 - En espanol, clara y directa, con los datos concretos (pedido, cliente,

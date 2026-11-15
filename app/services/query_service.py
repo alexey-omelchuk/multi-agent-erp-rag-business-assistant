@@ -16,6 +16,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.coordinator import build_coordinator
+from app.observability import get_langfuse_handler
 from app.services.trace import TraceRecorder, build_reasoning, build_sources
 
 logger = logging.getLogger(__name__)
@@ -48,13 +49,21 @@ class QueryService:
         started = time.perf_counter()
         logger.info("query_start session=%s question=%r", session_id, question)
 
+        # El recorder recibe cada llamada a tool, tambien las de los subagentes.
+        # Si Langfuse esta configurado, recibe ademas toda la ejecucion.
+        callbacks = [recorder]
+        if (langfuse := get_langfuse_handler()) is not None:
+            callbacks.append(langfuse)
+
         result = self._agent.invoke(
             {"messages": [{"role": "user", "content": question}]},
             config={
                 # thread_id: el checkpointer guarda y recupera la conversacion de esta sesion.
                 "configurable": {"thread_id": session_id},
-                # El recorder recibe cada llamada a tool, tambien las de los subagentes.
-                "callbacks": [recorder],
+                "callbacks": callbacks,
+                # Langfuse agrupa las trazas de una misma conversacion por este identificador.
+                "metadata": {"langfuse_session_id": session_id},
+                "run_name": "consulta",
             },
         )
 

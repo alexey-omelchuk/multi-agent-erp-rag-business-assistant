@@ -70,6 +70,29 @@ class ErpRepository:
         )
         return [dict(row) for row in rows]
 
+    def customers_overview(self, country: str | None = None) -> list[dict]:
+        """Todos los clientes con su numero de pedidos, pendientes e importe total.
+
+        Una sola consulta agregada: sirve para preguntas generales sobre los
+        clientes sin tener que pedir los pedidos de cada uno por separado.
+        """
+        rows = self._query(
+            """
+            SELECT c.CustomerID AS customer_id, c.CompanyName AS company_name, c.Country AS country,
+                   count(DISTINCT o.OrderID) AS orders,
+                   count(DISTINCT CASE WHEN o.OrderID IS NOT NULL AND o.ShippedDate IS NULL THEN o.OrderID END) AS pending_orders,
+                   round(coalesce(sum(d.UnitPrice * d.Quantity * (1 - d.Discount)), 0), 2) AS total_amount
+              FROM Customers c
+              LEFT JOIN Orders o ON o.CustomerID = c.CustomerID
+              LEFT JOIN "Order Details" d ON d.OrderID = o.OrderID
+             WHERE :country IS NULL OR lower(c.Country) = lower(:country)
+             GROUP BY c.CustomerID
+             ORDER BY total_amount DESC
+            """,
+            {"country": country.strip() if country else None},
+        )
+        return [dict(row) for row in rows]
+
     def customer_orders(self, customer_id: str, only_pending: bool = False) -> list[dict]:
         """Pedidos de un cliente, del mas reciente al mas antiguo."""
         sql = _ORDER_SELECT + " WHERE o.CustomerID = upper(:customer_id)"

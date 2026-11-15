@@ -87,5 +87,10 @@ async def on_message(message: cl.Message):
                 await _upload_pdfs(client, message.elements)
             if message.content.strip():
                 await _ask(client, message.content.strip())
+    except httpx.TimeoutException:
+        await cl.Message(
+            content="**La consulta ha tardado demasiado y se ha cancelado.** Prueba a acotarla: "
+            "un cliente, un país, un periodo o un estado concreto."
+        ).send()
     except httpx.HTTPError as exc:
         await cl.Message(content=f"**Error.** No se ha podido conectar con la API ({API_URL}): {type(exc).__name__}").send()

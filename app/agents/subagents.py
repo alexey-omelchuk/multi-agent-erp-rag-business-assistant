@@ -6,6 +6,7 @@ tools); el coordinador la descubre por su descripcion.
 
 from deepagents import SubAgent
 
+from app.agents.limits import build_limits
 from app.agents.prompts import (
     DOCUMENTS_AGENT,
     DOCUMENTS_PROMPT,
@@ -31,6 +32,7 @@ def build_subagents() -> list[SubAgent]:
             ),
             "system_prompt": ERP_PROMPT,
             "tools": ERP_TOOLS,
+            "middleware": build_limits(),
         },
         {
             "name": PRODUCTION_AGENT,
@@ -41,6 +43,7 @@ def build_subagents() -> list[SubAgent]:
             ),
             "system_prompt": PRODUCTION_PROMPT,
             "tools": PRODUCTION_TOOLS,
+            "middleware": build_limits(),
         },
         {
             "name": DOCUMENTS_AGENT,
@@ -50,5 +53,6 @@ def build_subagents() -> list[SubAgent]:
             ),
             "system_prompt": DOCUMENTS_PROMPT,
             "tools": DOCUMENT_TOOLS,
+            "middleware": build_limits(),
         },
     ]

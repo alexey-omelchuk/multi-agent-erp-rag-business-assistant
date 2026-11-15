@@ -210,3 +210,59 @@ def test_sources_name_documents_and_pages():
 def test_reasoning_without_any_tool():
     assert build_sources([]) == []
     assert build_reasoning([]) == ["Coordinador: responde sin consultar ninguna fuente de datos"]
+
+
+# --- Limites y fuentes ---
+
+
+def test_agent_stops_calling_tools_at_the_limit(sources, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "agent_max_tool_calls", 2)
+    service, model = make_service([
+        tool_call("task", {"subagent_type": "erp-agent", "description": "Pedidos de todos los clientes, uno a uno"}, "c1"),
+        # El agente ERP intenta tres llamadas; solo se ejecutan dos.
+        tool_call("get_customer_orders", {"customer_id": "ERNSH"}, "e1"),
+        tool_call("get_customer_orders", {"customer_id": "ALFKI"}, "e2"),
+        tool_call("get_customer_orders", {"customer_id": "QUICK"}, "e3"),
+        AIMessage(content="Solo he podido consultar dos clientes: he alcanzado el límite."),
+        AIMessage(content="La pregunta es demasiado amplia; aquí tienes dos clientes."),
+    ])
+    result = service.ask("Dame todos los clientes y todos sus pedidos")
+
+    executed = [step["args"]["customer_id"] for step in result.steps if step["tool"] == "get_customer_orders"]
+    assert executed == ["ERNSH", "ALFKI"]
+    # El agente ha recibido el aviso del limite en lugar del resultado de la tercera llamada.
+    blocked = [m.content for m in model.received[4] if isinstance(m, ToolMessage)][-1]
+    assert "limit" in blocked.lower()
+    assert result.answer.startswith("La pregunta es demasiado amplia")
+
+
+def test_list_customers_answers_broad_questions_in_one_call(sources):
+    service, _ = make_service([
+        tool_call("task", {"subagent_type": "erp-agent", "description": "Clientes con su número de pedidos e importe"}, "c1"),
+        tool_call("list_customers", {}, "e1"),
+        AIMessage(content="Hay 93 clientes y 830 pedidos."),
+        AIMessage(content="Hay 93 clientes con 830 pedidos en total."),
+    ])
+    result = service.ask("Dame todos los clientes y sus pedidos")
+
+    assert result.sources == ["ERP"]
+    assert [step["tool"] for step in result.steps] == ["task", "list_customers"]
+    assert "→ 93 clientes, 830 pedidos" in "\n".join(result.reasoning)
+
+
+def test_sources_list_each_document_once_with_all_its_pages():
+    def search(pages_by_document):
+        hits = [{"document": d, "page": p, "relevance": 0.8, "text": "..."} for d, pages in pages_by_document.items() for p in pages]
+        return TraceStep(agent="documents-agent", tool="search_documents", args={"query": "x"}, result={"results": hits})
+
+    steps = [
+        TraceStep(agent="erp-agent", tool="search_customers", args={"query": "Ernst"}, result={"customers": []}),
+        TraceStep(agent="documents-agent", tool="list_documents", args={}, result={"documents": []}),
+        search({"contrato.pdf": [1, 2], "procedimiento.pdf": [1]}),
+        search({"contrato.pdf": [1]}),
+    ]
+    assert build_sources(steps) == ["ERP", "Documento: contrato.pdf (pág. 1, 2)", "Documento: procedimiento.pdf (pág. 1)"]
+    # Si solo se ha listado, sin leer ningun fragmento, la fuente es generica.
+    assert build_sources(steps[:2]) == ["ERP", "Documentos"]

@@ -1,208 +1,258 @@
-# Multi-Agent Enterprise Business Assistant
+# Asistente de negocio multi-agente
 
-Answers natural language business questions by orchestrating data across three distinct sources:
+Responde preguntas de negocio en lenguaje natural combinando tres fuentes de datos:
 
-| Source         | Business Context                              | Integration Method          |
-| -------------- | --------------------------------------------- | --------------------------- |
-| **ERP**        | Clients, orders, and financial amounts        | Northwind Database (SQLite) |
-| **Production** | Manufacturing status, bottlenecks, and delays | REST API                    |
-| **Documents**  | Contracts, SLAs, and PDF procedures           | RAG over a Vector Database  |
+| Fuente         | Qué aporta                                 | Cómo se consulta                 |
+| -------------- | ------------------------------------------ | -------------------------------- |
+| **ERP**        | Clientes, pedidos e importes               | Base de datos Northwind (SQLite) |
+| **Producción** | Estado de fabricación, bloqueos y retrasos | API REST                         |
+| **Documentos** | Contratos y procedimientos en PDF          | RAG sobre una base vectorial     |
 
-A Coordinator Agent, built with **LangChain Deep Agents**, plans the execution, delegates tasks to source-specific specialized agents, and synthesizes a final response. Every answer explicitly details **which sources were queried and the exact execution steps taken**.
+Un agente coordinador, construido con **Deep Agents de LangChain**, planifica la consulta, delega en un agente especializado por fuente y redacta una única respuesta. Cada respuesta indica **qué fuentes se han consultado y qué pasos se han ejecutado**.
 
 ---
 
-## Quickstart & Deployment
+## Puesta en marcha
 
-You only need Docker (with Compose v2) and an OpenAI or Anthropic API key.
+Solo hace falta Docker (con Compose v2) y una clave de API de OpenAI, Azure OpenAI o Anthropic.
 
-**1. Configure the model**
+**1. Configura el modelo**
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the following values:
+Abre `.env` y rellena el bloque de tu proveedor:
 
 ```env
+# OpenAI
 MODEL=openai:gpt-5.6-luna
-OPENAI_API_KEY=your-api-key
+OPENAI_API_KEY=tu-clave
 ```
 
-**2. Boot up the system**
+```env
+# Azure OpenAI
+MODEL=azure_openai:gpt-5.6-luna
+AZURE_OPENAI_API_KEY=tu-clave
+AZURE_OPENAI_BASE_URL=https://tu-recurso.openai.azure.com/
+AZURE_OPENAI_API_VERSION=2024-12-01-preview
+AZURE_OPENAI_MODEL_DEPLOYMENT_NAME=gpt-5.6-luna
+```
+
+**2. Arranca**
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
-The initial startup takes a few minutes. During boot, the system automatically provisions the ERP data, the mock production data, and pre-indexes two sample PDFs into the vector store.
+La primera vez tarda unos minutos. Al arrancar se preparan solos los datos del ERP, los de producción y dos PDF de ejemplo ya indexados.
 
-**3. Start using it**
+**3. Úsalo**
 
-| Service                         | URL                        |
-| ------------------------------- | -------------------------- |
-| **Chat UI**                     | http://localhost:8080      |
-| **Main API** (Interactive docs) | http://localhost:8000/docs |
-| Mock Production API             | http://localhost:8001/docs |
+| Servicio                            | Dirección                  |
+| ----------------------------------- | -------------------------- |
+| **Chat**                            | http://localhost:8080      |
+| **API** (documentación interactiva) | http://localhost:8000/docs |
+| Sistema de producción simulado      | http://localhost:8001/docs |
 
-To stop the system: run `docker compose down` (add `-v` to wipe generated data and volumes).
+Para comprobar que el modelo responde antes de preguntar nada (tarda segundos y dice el error exacto si falla una clave, la URL o la versión de la API):
+
+```bash
+docker compose run --rm cli python scripts/check_model.py
+```
+
+Para ver qué hay guardado en cada fuente (tablas del ERP, estados de producción, fragmentos indexados), sin usar el modelo:
+
+```bash
+docker compose run --rm cli python scripts/inspect_data.py erp
+docker compose run --rm cli python scripts/inspect_data.py chroma
+docker compose run --rm cli python scripts/inspect_data.py search "penalización por retraso"
+```
+
+Para parar: `docker compose down` (con `-v` se borran también los datos generados).
 
 ---
 
-## Usage Examples
+## Observabilidad con Langfuse (opcional)
 
-### Via Chat Interface
+Cada respuesta lleva ya su propia traza (`sources`, `reasoning`, `steps`). Para una vista más profunda, pensada para quien opera el sistema, cada consulta se puede enviar además a un [Langfuse](https://langfuse.com) autoalojado: cada llamada al modelo y a cada herramienta, anidada por agente, con sus entradas, salidas, tokens y tiempos, y agrupada por conversación.
 
-Open http://localhost:8080 and start asking questions. Example queries:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d --build
+```
 
-- _What pending orders does the client Ernst Handel have, and what is their current production status?_
-- _Which orders are currently blocked and what is the underlying reason?_
-- _Which clients have delayed orders due to production bottlenecks?_
-- _Give me a summary of the status of all orders placed this month._
-- _Are there any financial penalties for delivery delays mentioned in the contract?_
+Para no repetir los dos `-f` en cada comando, descomenta la línea `COMPOSE_FILE` de `.env`: a partir de ahí, `docker compose up -d` lo levanta todo.
 
-The system supports follow-up conversational queries (_"and which of those are blocked?"_, _"what is the financial impact of those?"_). To query a document, simply attach a PDF using the paperclip icon.
+| Servicio     | Dirección             | Acceso                                 |
+| ------------ | --------------------- | -------------------------------------- |
+| **Langfuse** | http://localhost:3000 | `admin@example.com` / `langfuse-local` |
 
-### Via REST API
+No requiere configuración manual: el usuario, el proyecto y sus claves de API se crean en el primer arranque, y la aplicación usa esas mismas claves. Langfuse necesita unos minutos más y alrededor de 4 GB de RAM la primera vez.
+
+El usuario y la contraseña se cambian con `LANGFUSE_INIT_USER_EMAIL` y `LANGFUSE_INIT_USER_PASSWORD` en `.env`, antes del primer arranque. Las contraseñas de `docker-compose.langfuse.yml` son para uso local: cambia todas las líneas marcadas con `CHANGEME` antes de exponerlo.
+
+El envío de trazas solo se activa si existen `LANGFUSE_PUBLIC_KEY` y `LANGFUSE_SECRET_KEY`. Sin ellas, o si Langfuse no responde, las consultas funcionan exactamente igual.
+
+---
+
+## Ejemplos de uso
+
+### Desde el chat
+
+Abre http://localhost:8080 y pregunta. Algunas preguntas que resuelve:
+
+- _¿Qué pedidos pendientes tiene el cliente Ernst Handel y en qué estado de producción están?_
+- _¿Qué pedidos están bloqueados y cuál es el motivo?_
+- _¿Qué clientes tienen pedidos retrasados por problemas de producción?_
+- _Dame un resumen del estado de los pedidos de este mes._
+- _¿Hay alguna penalización por retrasos en el contrato?_
+
+Admite preguntas encadenadas (_"¿y cuáles de esos están bloqueados?"_, _"¿cuál es el impacto económico de esos?"_). Para añadir un documento, adjunta un PDF con el clip.
+
+### Desde la API
 
 ```bash
 curl -X POST http://localhost:8000/api/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "Which orders are blocked and what is the reason?", "session_id": "demo"}'
+  -d '{"question": "¿Qué pedidos están bloqueados y cuál es el motivo?", "session_id": "demo"}'
 ```
 
-The response consistently follows this schema:
+Respuesta real del sistema (GPT-5.6 Luna):
 
 ```json
 {
-  "answer": "Final response synthesized by the LLM based on retrieved context.",
-  "sources": ["Production", "ERP"],
+  "answer": "Los pedidos bloqueados son:\n\n- **11039**: Falta de materia prima; proveedor sin stock.\n- **11054**: Retenido por riesgo de crédito del cliente.\n- **11062**: Falta de materia prima; proveedor sin stock.\n- **11071**: Incidencia de calidad; lote retenido para inspección.\n- **11075**: Incidencia de calidad; lote retenido para inspección.",
+  "sources": ["Producción"],
   "reasoning": [
-    "Plan: (1) Ask the Production API for blocked orders; (2) Ask the ERP for the client tied to each order.",
-    "Coordinator: delegates to the Production Agent → «...»",
-    "Production Agent: queries production API for orders in 'blocked' state → 5 found (...)",
-    "Coordinator: delegates to the ERP Agent → «...»",
-    "ERP Agent: queries ERP for client and amount details for the retrieved orders [...] → 5 clients found...",
-    "Coordinator: synthesizes results from Production and ERP to draft the final response."
+    "Coordinador: delega en el agente de producción → «Consulta el sistema de producción y devuelve todos los pedidos actualmente bloqueados...»",
+    "Agente de producción: lista en producción los pedidos en estado «bloqueado» → 5 (11039, 11054, 11062, 11071, 11075)",
+    "Coordinador: redacta la respuesta con los datos de Producción"
   ],
   "session_id": "demo"
 }
 ```
 
-It also includes a `steps` array (detailed logging of each tool invocation) and `duration_ms`. The `session_id` is optional: passing the same value allows the system to remember the conversation context.
+Incluye además `steps` (el detalle de cada llamada a una herramienta) y `duration_ms`. `session_id` es opcional: repitiendo el mismo valor, el sistema recuerda la conversación.
 
-To upload a document via API:
+Para subir un documento:
 
 ```bash
-curl -X POST http://localhost:8000/api/documents -F "file=@contract.pdf"
+curl -X POST http://localhost:8000/api/documents -F "file=@contrato.pdf"
 ```
 
 ---
 
-## System Architecture
+## Arquitectura
 
 ```mermaid
 flowchart TD
-    U[Browser] --> UI[Chat UI · Chainlit]
-    UI -->|HTTP| API[Main API · FastAPI]
-    API --> C[Coordinator · Deep Agent]
-    C -->|delegates| E[ERP Agent]
-    C -->|delegates| P[Production Agent]
-    C -->|delegates| D[Document Agent]
+    U[Navegador] --> UI[Chat · Chainlit]
+    UI -->|HTTP| API[API principal · FastAPI]
+    API --> C[Coordinador · Deep Agent]
+    C -->|delega| E[Agente ERP]
+    C -->|delega| P[Agente de producción]
+    C -->|delega| D[Agente de documentos]
     E --> ERP[(Northwind · SQLite)]
-    P -->|HTTP| PROD[Production API]
-    D --> VEC[(Chroma · Vector DB)]
+    P -->|HTTP| PROD[API de producción]
+    D --> VEC[(Chroma · vectores)]
 ```
 
-**Query Execution Flow**
+**Cómo se resuelve una pregunta**
 
-1. The **Coordinator** formulates a plan and distributes the workload. It has _no direct access_ to any data; its sole responsibility is delegation.
-2. Each **Specialized Agent** receives a task, utilizes its specific tools, and returns a concise summary.
-3. The Coordinator **cross-references the results** (e.g., joining ERP and Production data via Order IDs) and drafts the final user-facing response.
-4. Concurrently, the system **audits every tool invocation**. The `sources` and `reasoning` outputs are generated deterministically from these logs.
+1. El **coordinador** escribe un plan y reparte el trabajo. No tiene acceso a ningún dato: solo puede delegar.
+2. Cada **agente especializado** recibe su encargo, usa sus herramientas y devuelve una respuesta breve.
+3. El coordinador **cruza los resultados** (ERP y producción se unen por el número de pedido) y redacta la respuesta.
+4. Mientras tanto, el sistema **registra cada llamada a una herramienta**. De ese registro salen `sources` y `reasoning`.
 
-**Codebase Organization**
+**Organización del código**
 
-| Directory                       | Responsibility                                                        |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `app/data_sources/`, `app/rag/` | Infrastructure layer: SQL execution, HTTP requests, and Vector Search |
-| `app/tools/`                    | Tool implementations exposed to the agents                            |
-| `app/agents/`                   | Prompts, agent definitions (Coordinator & sub-agents), and memory     |
-| `app/services/`                 | Query execution logic and traceability builders                       |
-| `app/api/`                      | FastAPI endpoints                                                     |
-| `ui/`                           | Chainlit Chat Interface                                               |
-| `production_api/`               | Simulated Production Microservice (standalone app)                    |
+| Carpeta                         | Responsabilidad                                              |
+| ------------------------------- | ------------------------------------------------------------ |
+| `app/data_sources/`, `app/rag/` | Hablar con cada fuente: SQL, HTTP y búsqueda vectorial       |
+| `app/tools/`                    | Las herramientas que pueden usar los agentes                 |
+| `app/agents/`                   | Coordinador, agentes especializados, instrucciones y memoria |
+| `app/services/`                 | Ejecutar una consulta y construir la trazabilidad            |
+| `app/api/`                      | Endpoints HTTP                                               |
+| `ui/`                           | Interfaz de chat                                             |
+| `production_api/`               | Sistema de producción simulado (servicio independiente)      |
 
-Adding a new data source simply requires writing its specific tools and registering a new sub-agent in `app/agents/subagents.py`. The core orchestration logic remains untouched.
-
----
-
-## Architecture & Engineering Decisions
-
-**Deterministic, Code-Driven Traceability.**
-`sources` and `reasoning` are built directly from actual tool execution logs, not generated by the LLM. A source is only cited if a successful query was made, and each step includes the raw data retrieved. The model cannot hallucinate tool executions. All actions are securely logged.
-
-**Strict Agent Boundaries (Zero Data Access for Coordinator).**
-The Coordinator strictly plans and delegates. It cannot query databases directly. This enforces a true multi-agent topology and keeps the context window for each agent small, focused, and efficient.
-
-**No LLM-Generated SQL (Security First).**
-To guarantee predictability and eliminate SQL injection vectors, the LLM is strictly prohibited from writing raw SQL. ERP queries are routed through predefined, parameterized endpoints, and the database connection is strictly read-only.
-
-**Decoupled Microservice Architecture.**
-Because production data wasn't natively provided, it is simulated as an isolated REST API. The main application queries it strictly over HTTP, mirroring real-world enterprise architectures and enabling independent manual validation of the responses.
-
-**Dynamic Date Shifting for Realism.**
-The original Northwind dataset dates back to 1996-1998, meaning queries like "this month's orders" would fail. On boot, the system dynamically shifts all database dates forward so the latest order aligns with today, preserving all logical delivery timelines and delays.
-
-**Data Privacy First (Local Embeddings).**
-Vector embeddings are computed using a fast, local model. Document contents never leave the host machine during the embedding process, eliminating API costs and ensuring privacy. Only strictly retrieved chunks are sent to the LLM provider for the final synthesis.
-
-**Strict RAG Citations.**
-Every retrieved text chunk stores its source document and page number. If the retrieved context is irrelevant, the system is instructed to explicitly state that the documents do not contain the answer, effectively preventing hallucinations.
-
-**Session-Based Memory.**
-State is maintained via `session_id`. The LLM is provided with the current query and the rolling window of the last five interactions to maintain conversational context.
-
-**LLM Provider Agnosticism.**
-The core logic is decoupled from the underlying LLM. Providers (OpenAI, Anthropic, Ollama) can be swapped instantly by changing the `MODEL` environment variable, requiring zero code modifications.
+Añadir una fuente nueva consiste en escribir sus herramientas y declarar un agente más en `app/agents/subagents.py`. El resto del sistema no cambia.
 
 ---
 
-## Testing
+## Decisiones técnicas
+
+**La trazabilidad la genera el código, no el modelo.**
+`sources` y `reasoning` se construyen a partir de las llamadas reales a las herramientas. Una fuente solo aparece si se ha consultado con éxito, y cada paso incluye los datos usados. El modelo no puede atribuirse una consulta que no ha hecho. Todo queda además en los logs.
+
+**El coordinador no accede a los datos.**
+Solo planifica y delega. Esto garantiza un diseño multi-agente real y mantiene pequeño el contexto de cada agente.
+
+**El modelo no escribe SQL.**
+Las consultas al ERP son fijas y parametrizadas, y la base se abre en solo lectura. Se evita la inyección de SQL y el comportamiento es predecible.
+
+**El sistema de producción se simula como un servicio aparte.**
+El enunciado no lo proporciona, así que se ha creado una API independiente a la que la aplicación solo accede por HTTP, como haría con un sistema real. Sus datos se generan a partir de los pedidos del ERP y son siempre los mismos, lo que permite comprobar las respuestas a mano.
+
+**Las fechas de Northwind se actualizan.**
+Los pedidos originales son de 1996 a 1998, y "los pedidos de este mes" no devolvería nada. Al arrancar se desplazan todas las fechas por igual para que el último pedido sea de hoy; los plazos y retrasos se conservan.
+
+**Los documentos no salen de la máquina.**
+Los embeddings se calculan con un modelo local, sin coste ni clave. Al proveedor del modelo de lenguaje solo llegan los fragmentos necesarios para responder.
+
+**Las respuestas sobre documentos citan su origen.**
+Cada fragmento guarda documento y página. Si ningún fragmento es suficientemente relevante, el sistema dice que los documentos no lo recogen en lugar de improvisar.
+
+**Ejecución acotada.**
+Cada agente tiene un máximo de llamadas a herramientas por consulta (`AGENT_MAX_TOOL_CALLS`, 10 por encargo de un subagente; `COORDINATOR_MAX_TOOL_CALLS`, 8), aplicado con el middleware de límites de LangChain. Superado el máximo, las llamadas dejan de ejecutarse y el agente responde con lo que tiene, de modo que una pregunta demasiado amplia no se convierte en minutos de llamadas. Las preguntas amplias se resuelven con herramientas agregadas (por ejemplo, todos los clientes con su número de pedidos en una sola consulta).
+
+**Memoria por conversación.**
+Se guarda el historial de cada `session_id` y se envían al modelo la pregunta actual y las cinco interacciones anteriores.
+
+**El proveedor del modelo es intercambiable.**
+Se elige con la variable `MODEL` (OpenAI, Azure OpenAI, Anthropic, Ollama), sin tocar el código. La temperatura solo se envía si se define `MODEL_TEMPERATURE`, porque los modelos de razonamiento como GPT-5.6 Luna usan la suya.
+
+**Dos niveles de trazabilidad.**
+La traza de cada respuesta (`sources`, `reasoning`) la construye la aplicación y está siempre presente, así que se puede mostrar al usuario final. Langfuse es una capa opcional para quien opera el sistema: depuración y seguimiento. Se conecta como un callback de LangChain, se desactiva sin cambiar código y nunca afecta a que una consulta funcione.
+
+---
+
+## Tests
 
 ```bash
 docker compose run --rm --build tests
 ```
 
-The test suite contains 88 unit and integration tests that **do not require an API key**. Agent behaviors are tested against a mocked LLM that follows a predefined script, verifying that delegation, tooling, traceability, memory, and API layers function flawlessly under real-code conditions.
+102 tests que **no necesitan clave de API**. Los agentes se prueban con un modelo simulado que sigue un guion; todo lo demás (delegación, herramientas, trazabilidad, memoria, límites, configuración del modelo, integración con Langfuse y API) es el código real.
 
 ---
 
-## Dependencies
+## Dependencias
 
-Built with Python 3.12. All dependencies are strictly pinned in `pyproject.toml` and `uv.lock`.
+Python 3.12, con las dependencias fijadas en `pyproject.toml` y `uv.lock`.
 
-| Category               | Libraries                                                            |
-| ---------------------- | -------------------------------------------------------------------- |
-| Agents & Orchestration | `deepagents`, `langchain`, `langgraph`                               |
-| LLM Integrations       | `langchain-openai`, `langchain-anthropic`, `langchain-ollama`        |
-| RAG & Vector DB        | `langchain-chroma`, `fastembed`, `langchain-text-splitters`, `pypdf` |
-| API Layer              | `fastapi`, `uvicorn`, `httpx`                                        |
-| User Interface         | `chainlit`                                                           |
-| Testing                | `pytest`                                                             |
-
----
-
-## Known Limitations
-
-- **Volatile Memory:** Conversation memory is cleared upon API restart. This can be resolved by swapping the in-memory store for a persistent cache (e.g., Redis).
-- **Missing Authentication:** The API is unauthenticated. In a production environment, this would require a gateway/auth layer and tenant-isolated document storage.
-- **Basic Search Capabilities:** The embedded model is lightweight. Highly semantic queries that deviate significantly from the document's vocabulary might miss exact chunks.
-- **No OCR Support:** Scanned PDFs without a text layer are currently rejected with a warning.
+| Para qué         | Librerías                                                            |
+| ---------------- | -------------------------------------------------------------------- |
+| Agentes          | `deepagents`, `langchain`, `langgraph`                               |
+| Modelos          | `langchain-openai`, `langchain-anthropic`, `langchain-ollama`        |
+| Documentos (RAG) | `langchain-chroma`, `fastembed`, `langchain-text-splitters`, `pypdf` |
+| API              | `fastapi`, `uvicorn`, `httpx`                                        |
+| Interfaz         | `chainlit`                                                           |
+| Observabilidad   | `langfuse`                                                           |
+| Tests            | `pytest`                                                             |
 
 ---
 
-## Data Acknowledgements
+## Limitaciones conocidas
 
-- **Northwind**: SQLite port by [jpwhite3/northwind-SQLite3](https://github.com/jpwhite3/northwind-SQLite3) (MIT License).
-- Production data and the PDFs inside `data/docs/` are **fictitious assets** generated exclusively for this technical demonstration.
+- **La memoria se pierde al reiniciar la API.** Para conservarla bastaría con cambiar el almacén de memoria por uno persistente.
+- **La API no tiene autenticación.** En un entorno real iría protegida y con los documentos separados por usuario.
+- **La búsqueda en documentos es mejorable.** El modelo de embeddings es pequeño; con preguntas formuladas de forma muy distinta al texto puede no encontrar el fragmento exacto.
+- **No se leen PDF escaneados** (no hay OCR): se rechazan con un aviso.
+
+---
+
+## Datos
+
+- **Northwind**: versión para SQLite de [jpwhite3/northwind-SQLite3](https://github.com/jpwhite3/northwind-SQLite3) (licencia MIT).
+- Los datos de producción y los PDF de `data/docs/` son **ficticios**, creados para esta demostración.

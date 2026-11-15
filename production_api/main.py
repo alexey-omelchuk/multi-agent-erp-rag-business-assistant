@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query, Request, status
+from fastapi.responses import RedirectResponse
 
 from production_api.models import (
     ProductionOrder,
@@ -75,6 +76,12 @@ async def get_summary(repository: repository_dependency):
 
 app = FastAPI(title="Sistema de produccion (simulado)", version="1.0.0", lifespan=lifespan)
 app.include_router(router)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    # Quien abre http://localhost:8001 en el navegador llega a la documentacion.
+    return RedirectResponse("/docs")
 
 
 @app.get("/health", tags=["health"])

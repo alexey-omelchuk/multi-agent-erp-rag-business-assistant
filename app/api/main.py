@@ -9,6 +9,7 @@ Documentacion interactiva: http://localhost:8000/docs
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from app.api.routers import documents, query
 from app.config import get_settings
@@ -29,6 +30,12 @@ app = FastAPI(
 )
 app.include_router(query.router)
 app.include_router(documents.router)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    # Quien abre http://localhost:8000 en el navegador llega a la documentacion.
+    return RedirectResponse("/docs")
 
 
 @app.get("/health", tags=["health"])

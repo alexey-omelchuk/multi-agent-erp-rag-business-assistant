@@ -6,6 +6,9 @@
 # Scripts:    docker compose run --rm cli python scripts/try_tools.py
 #             docker compose run --rm cli python scripts/try_rag.py
 #             docker compose run --rm cli python scripts/ask.py "pregunta"
+# Con Langfuse: docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d --build
+# Ver los datos: docker compose run --rm cli python scripts/inspect_data.py erp|production|chroma|search "..."
+# Comprobar el modelo: docker compose run --rm cli python scripts/check_model.py
 # Parar:      docker compose down        (anade -v para borrar tambien los datos)
 
 # Rutas de los datos generados, compartidas por los servicios que los usan.

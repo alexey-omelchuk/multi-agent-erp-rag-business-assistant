@@ -140,23 +140,27 @@ def build_sources(steps: list[TraceStep]) -> list[str]:
 
     De los documentos se indica ademas cuales se han leido y en que paginas.
     """
-    sources: list[str] = []
+    sources: list[str] = []  # en orden de primer uso
+    pages: dict[str, set[int]] = {}  # paginas leidas de cada documento, sumando todas las busquedas
     for step in steps:
         if step.source is None or step.failed:
             continue
-        names = [step.source]
+        if step.source not in sources:
+            sources.append(step.source)
         if step.tool == "search_documents" and isinstance(step.result, dict):
-            pages: dict[str, set[int]] = {}
             for hit in step.result.get("results", []):
                 pages.setdefault(hit["document"], set()).add(hit["page"])
-            names = [
-                f"Documento: {document} (pág. {', '.join(str(page) for page in sorted(found))})"
-                for document, found in pages.items()
-            ] or names
-        for name in names:
-            if name not in sources:
-                sources.append(name)
-    return sources
+
+    if not pages:
+        return sources
+    # Si se han leido fragmentos, "Documentos" se sustituye por cada documento
+    # concreto, una sola vez, con todas sus paginas.
+    documents = [
+        f"Documento: {document} (pág. {', '.join(str(page) for page in sorted(found))})"
+        for document, found in pages.items()
+    ]
+    position = sources.index("Documentos")
+    return sources[:position] + documents + sources[position + 1 :]
 
 
 # --- De la traza a "reasoning" ---
@@ -173,6 +177,11 @@ def _ids(orders: list[dict]) -> str:
 def _describe_search_customers(args: dict, result: Any) -> str:
     names = ", ".join(f"{c['company_name']} ({c['customer_id']})" for c in result.get("customers", []))
     return f"busca el cliente «{args.get('query')}» en el ERP → {names or 'sin coincidencias'}"
+
+
+def _describe_list_customers(args: dict, result: Any) -> str:
+    scope = f" de {args['country']}" if args.get("country") else ""
+    return f"lista los clientes{scope} con sus pedidos e importe en el ERP → {result.get('total', 0)} clientes, {result.get('total_orders', 0)} pedidos"
 
 
 def _describe_customer_orders(args: dict, result: Any) -> str:
@@ -223,6 +232,7 @@ def _describe_list_documents(args: dict, result: Any) -> str:
 
 _DESCRIBERS = {
     "search_customers": _describe_search_customers,
+    "list_customers": _describe_list_customers,
     "get_customer_orders": _describe_customer_orders,
     "get_pending_orders": _describe_pending_orders,
     "get_orders_by_id": _describe_orders_by_id,
@@ -245,6 +255,8 @@ def _describe(step: TraceStep) -> str:
 
     if step.error:
         return f"{agent}: la herramienta {step.tool} ha fallado ({step.error})"
+    if isinstance(step.result, str) and "limit" in step.result.lower() and step.source:
+        return f"{agent}: ha alcanzado el límite de llamadas a herramientas de esta consulta"
     if isinstance(step.result, dict) and "error" in step.result:
         return f"{agent}: {step.tool} no ha podido obtener datos ({step.result['error']})"
 
