@@ -62,6 +62,18 @@ def test_query_with_session_id_keeps_memory(client, sources):  # noqa: F811
     assert second.json()["sources"] == []
 
 
+def test_attached_documents_reach_the_agent(client, sources):  # noqa: F811
+    model = use_script([AIMessage(content="Es la operación DICE.")])
+    response = client.post(
+        "/api/query",
+        json={"question": "¿Cómo se llama esta operación?", "documents": ["examen_olap.pdf"]},
+    )
+    assert response.status_code == 200
+    user_message = model.received[0][-1].content
+    assert user_message.startswith("¿Cómo se llama esta operación?")
+    assert "examen_olap.pdf" in user_message
+
+
 @pytest.mark.parametrize("payload", [{}, {"question": ""}, {"question": "a"}, {"question": "x" * 2001}])
 def test_query_validates_the_question(client, payload):
     use_script([])

@@ -29,7 +29,7 @@ def query_service_dependency() -> QueryService:
 def query(request: QueryRequest, service: Annotated[QueryService, Depends(query_service_dependency)]):
     """Responde una pregunta de negocio con el sistema multi-agente."""
     try:
-        result = service.ask(request.question, request.session_id)
+        result = service.ask(request.question, request.session_id, request.documents)
     except Exception as exc:
         # Fallo del modelo (clave incorrecta, limite de uso, caida del proveedor...).
         logger.exception("query_failed session=%s", request.session_id)

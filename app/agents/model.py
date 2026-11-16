@@ -11,6 +11,10 @@ from langchain_core.language_models import BaseChatModel
 from app.config import Settings, get_settings
 
 
+# Proveedores cuyo cliente admite "timeout" y "max_retries".
+_PROVIDERS_WITH_TIMEOUT = {"openai", "azure_openai", "anthropic"}
+
+
 class ModelNotConfiguredError(RuntimeError):
     """No se puede crear el modelo: falta la clave de API o MODEL no es valido."""
 
@@ -47,6 +51,13 @@ def get_chat_model() -> BaseChatModel:
     # modelos de razonamiento no suelen admitir una fija.
     if settings.model_temperature is not None:
         options["temperature"] = settings.model_temperature
+    if provider in _PROVIDERS_WITH_TIMEOUT:
+        # Si el proveedor no responde, la llamada falla pronto y con un error
+        # claro, en lugar de dejar la consulta colgada.
+        options["timeout"] = settings.model_timeout_seconds
+        options["max_retries"] = settings.model_max_retries
+    if settings.model_reasoning_effort:
+        options["reasoning_effort"] = settings.model_reasoning_effort
     if provider == "azure_openai":
         options.update(_azure_options(settings, model_name))
 

@@ -216,7 +216,7 @@ La traza de cada respuesta (`sources`, `reasoning`) la construye la aplicación 
 docker compose run --rm --build tests
 ```
 
-102 tests que **no necesitan clave de API**. Los agentes se prueban con un modelo simulado que sigue un guion; todo lo demás (delegación, herramientas, trazabilidad, memoria, límites, configuración del modelo, integración con Langfuse y API) es el código real.
+103 tests que **no necesitan clave de API**. Los agentes se prueban con un modelo simulado que sigue un guion; todo lo demás (delegación, herramientas, trazabilidad, memoria, límites, configuración del modelo, integración con Langfuse y API) es el código real.
 
 ---
 

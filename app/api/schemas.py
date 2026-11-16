@@ -11,6 +11,12 @@ class QueryRequest(BaseModel):
         description="Identificador de la conversacion. Repite el mismo valor para hacer preguntas encadenadas.",
     )
 
+    documents: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Nombres de los documentos adjuntos a este mensaje (ya subidos con POST /api/documents).",
+    )
+
     model_config = {
         "json_schema_extra": {
             "example": {"question": "¿Qué pedidos están bloqueados y cuál es el motivo?", "session_id": "demo-1"}

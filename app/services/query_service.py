@@ -42,9 +42,16 @@ class QueryService:
     def __init__(self, agent: CompiledStateGraph):
         self._agent = agent
 
-    def ask(self, question: str, session_id: str | None = None) -> QueryResult:
-        """Responde una pregunta. Con el mismo session_id, recuerda la conversacion."""
+    def ask(self, question: str, session_id: str | None = None, documents: list[str] | None = None) -> QueryResult:
+        """Responde una pregunta. Con el mismo session_id, recuerda la conversacion.
+
+        `documents` son los PDF adjuntos a este mensaje: se le indican al agente
+        para que sepa que la pregunta puede referirse a ellos.
+        """
         session_id = session_id or uuid.uuid4().hex
+        content = question
+        if documents:
+            content += f"\n\n[Documentos adjuntos a este mensaje, ya indexados: {', '.join(documents)}]"
         recorder = TraceRecorder()
         started = time.perf_counter()
         logger.info("query_start session=%s question=%r", session_id, question)
@@ -56,7 +63,7 @@ class QueryService:
             callbacks.append(langfuse)
 
         result = self._agent.invoke(
-            {"messages": [{"role": "user", "content": question}]},
+            {"messages": [{"role": "user", "content": content}]},
             config={
                 # thread_id: el checkpointer guarda y recupera la conversacion de esta sesion.
                 "configurable": {"thread_id": session_id},

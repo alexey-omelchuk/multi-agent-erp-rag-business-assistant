@@ -219,7 +219,7 @@ The response-level trace (`sources`, `reasoning`) is built by the application an
 docker compose run --rm --build tests
 ```
 
-The test suite contains 102 unit and integration tests that **do not require an API key**. Agent behaviors are tested against a mocked LLM that follows a predefined script, verifying that delegation, tooling, traceability, memory, model configuration, Langfuse integration and API layers function flawlessly under real-code conditions.
+The test suite contains 103 unit and integration tests that **do not require an API key**. Agent behaviors are tested against a mocked LLM that follows a predefined script, verifying that delegation, tooling, traceability, memory, model configuration, Langfuse integration and API layers function flawlessly under real-code conditions.
 
 ---
 

@@ -48,7 +48,9 @@ def _error_detail(response: httpx.Response) -> str:
         return response.text
 
 
-async def _upload_pdfs(client: httpx.AsyncClient, elements: list) -> None:
+async def _upload_pdfs(client: httpx.AsyncClient, elements: list) -> list[str]:
+    """Sube los PDF adjuntos y devuelve los nombres de los que se han indexado."""
+    indexed: list[str] = []
     for element in elements:
         if not (element.name or "").lower().endswith(".pdf"):
             await cl.Message(content=f"**{element.name}** no es un PDF; se ha ignorado.").send()
@@ -56,17 +58,19 @@ async def _upload_pdfs(client: httpx.AsyncClient, elements: list) -> None:
         with open(element.path, "rb") as pdf:
             response = await client.post("/api/documents", files={"file": (element.name, pdf, "application/pdf")})
         if response.status_code == 201:
+            indexed.append(response.json()["document"])
             await cl.Message(content=format_upload(response.json())).send()
         else:
             await cl.Message(content=format_error(response.status_code, _error_detail(response))).send()
+    return indexed
 
 
-async def _ask(client: httpx.AsyncClient, question: str) -> None:
+async def _ask(client: httpx.AsyncClient, question: str, documents: list[str]) -> None:
     # El paso queda visible y desplegable: muestra que ha hecho el sistema.
     async with cl.Step(name="Razonamiento", type="run", show_input=False) as step:
         response = await client.post(
             "/api/query",
-            json={"question": question, "session_id": cl.user_session.get("session_id")},
+            json={"question": question, "session_id": cl.user_session.get("session_id"), "documents": documents},
         )
         if response.status_code == 200:
             step.output = format_reasoning(response.json()["reasoning"])
@@ -83,14 +87,14 @@ async def _ask(client: httpx.AsyncClient, question: str) -> None:
 async def on_message(message: cl.Message):
     try:
         async with httpx.AsyncClient(base_url=API_URL, timeout=TIMEOUT) as client:
-            if message.elements:
-                await _upload_pdfs(client, message.elements)
+            documents = await _upload_pdfs(client, message.elements) if message.elements else []
             if message.content.strip():
-                await _ask(client, message.content.strip())
+                await _ask(client, message.content.strip(), documents)
     except httpx.TimeoutException:
         await cl.Message(
-            content="**La consulta ha tardado demasiado y se ha cancelado.** Prueba a acotarla: "
-            "un cliente, un país, un periodo o un estado concreto."
+            content="**La consulta ha tardado demasiado y se ha cancelado.** Vuelve a intentarlo; "
+            "si la pregunta es muy amplia, acótala. Si se repite, puede que el modelo no esté "
+            "respondiendo: lo indican los logs de la API."
         ).send()
     except httpx.HTTPError as exc:
         await cl.Message(content=f"**Error.** No se ha podido conectar con la API ({API_URL}): {type(exc).__name__}").send()

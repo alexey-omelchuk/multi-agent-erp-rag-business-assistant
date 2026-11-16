@@ -43,6 +43,9 @@ def test_azure_model_uses_the_azure_variables(settings):
     assert chat_model.deployment_name == "mi-deployment"
     assert chat_model.openai_api_version == "2024-12-01-preview"
     assert chat_model.azure_endpoint == "https://recurso.openai.azure.com/"
+    # Una llamada colgada no puede dejar la consulta esperando minutos.
+    assert chat_model.request_timeout == 90
+    assert chat_model.max_retries == 1
 
 
 def test_azure_without_variables_explains_what_is_missing(settings):

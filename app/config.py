@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # Vacio: se usa el valor por defecto del proveedor. Los modelos de
     # razonamiento no suelen admitir una temperatura fija.
     model_temperature: float | None = None
+    # Tiempo maximo de espera de cada llamada al modelo y reintentos. Sin esto,
+    # una llamada colgada espera 10 minutos (el valor por defecto del proveedor).
+    model_timeout_seconds: float = Field(default=90, gt=0)
+    model_max_retries: int = Field(default=1, ge=0)
+    # Solo modelos de razonamiento: "low" responde mas rapido. Vacio: el valor del proveedor.
+    model_reasoning_effort: str | None = None
 
     # Azure OpenAI (solo si MODEL empieza por "azure_openai:").
     azure_openai_api_key: SecretStr | None = None
